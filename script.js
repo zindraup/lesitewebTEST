@@ -528,6 +528,10 @@ class AnimationSequence {
         card.style.width = currentWidth;
         card.style.height = currentHeight;
 
+        // La classe descend va maintenant utiliser la variable CSS pour la distance
+        card.classList.add('descend');
+        await this.delay(150); // Attendre la descente
+
         // LECTURE DE LA VIDEO / PLAY
         // Indiquer que le préchargement est terminé et lancer la lecture
         console.log("Animations terminées, tentative de lecture de la vidéo préchargée.");
@@ -553,9 +557,7 @@ class AnimationSequence {
             console.log("Lecteur non prêt ou fonction playVideo non disponible au moment de showVideoAndControls.");
         }
 
-        // La classe descend va maintenant utiliser la variable CSS pour la distance
-        card.classList.add('descend');
-        await this.delay(300); // Attendre la descente
+        await this.delay(150); // Attendre la descente
     }
 
     async showVideoAndControls() {
@@ -1052,7 +1054,7 @@ async function loadYouTubeVideo(videoId) {
         youtubePlayer = new YT.Player('youtube-player', {
             videoId: videoId,
             playerVars: {
-                'autoplay': 0, // Désactiver l'autoplay
+                'autoplay': isSpecial ? 0 : 1, // Désactiver l'autoplay
                 'controls': isSpecial ? 1 : 0, // Activer les contrôles natifs uniquement pour Lecteur Special
                 'showinfo': 0,
                 'modestbranding': 1,
