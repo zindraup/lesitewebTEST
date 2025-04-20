@@ -13,6 +13,7 @@ let videoLoadingCancelled = false; // Flag pour indiquer si le chargement a ét�
 let instagramMessageShown = false; // Flag pour suivre si le message Instagram a déjà été affiché
 let progressBarIntervalId = null; // Pour suivre l'intervalle de mise à jour
 let isPreloadingVideo = false; // Flag pour suivre si une vidéo est en cours de préchargement
+let iosFirstPlayDone = false; // Flag pour suivre si la première lecture iOS a été effectuée
 
 
 // Variables pour la sélection aléatoire améliorée
@@ -537,24 +538,25 @@ class AnimationSequence {
         console.log("Animations terminées, tentative de lecture de la vidéo préchargée.");
         isPreloadingVideo = false; // Fin du préchargement
 
-        // Essayer de lancer la lecture si le lecteur est prêt et pas en mode spécial
-        if (youtubePlayer && typeof youtubePlayer.playVideo === 'function') {
+        // Essayer de lancer la lecture si le lecteur est prêt ET SI ce n'est pas le premier play sur iOS
+        if (youtubePlayer && typeof youtubePlayer.playVideo === 'function' && !(isAnnoyingBrowser() && !iosFirstPlayDone)) {
             // Vérifier si le lecteur est dans un état où playVideo est pertinent (UNSTARTED, CUED, PAUSED)
             const currentState = youtubePlayer.getPlayerState();
             if (currentState === YT.PlayerState.UNSTARTED || currentState === YT.PlayerState.CUED || currentState === YT.PlayerState.PAUSED) {
-                console.log("Lancement de la lecture depuis showVideoAndControls.");
+                console.log("Lancement de la lecture depuis descendCard (non-iOS ou iOS après 1er play).");
                 youtubePlayer.playVideo();
             } else {
-                    console.log("showVideoAndControls: La vidéo est déjà en lecture ou dans un état inattendu (" + currentState + ").");
-                    // Si elle joue déjà (PLAYING ou BUFFERING), s'assurer que la barre démarre
-                    if(currentState === YT.PlayerState.PLAYING || currentState === YT.PlayerState.BUFFERING) {
-                        startProgressBarUpdate();
-                    }
+                console.log("descendCard: La vidéo est déjà en lecture ou dans un état inattendu (" + currentState + ").");
+                // Si elle joue déjà (PLAYING ou BUFFERING), s'assurer que la barre démarre (si contrôles custom)
+                const nativeControlsEnabled = (youtubePlayer.getPlayerVars && youtubePlayer.getPlayerVars().controls === 1);
+                if(!nativeControlsEnabled && (currentState === YT.PlayerState.PLAYING || currentState === YT.PlayerState.BUFFERING)) {
+                    startProgressBarUpdate();
+                }
             }
-        } else if (isSpecialBrowser()) {
-            console.log("Navigateur spécial détecté, la lecture attendra l'interaction utilisateur.");
+        } else if (isAnnoyingBrowser() && !iosFirstPlayDone) { 
+            console.log("Annoying Browser  détecté (premier play): La lecture attendra l'interaction utilisateur sur les contrôles natifs.");
         } else {
-            console.log("Lecteur non prêt ou fonction playVideo non disponible au moment de showVideoAndControls.");
+            console.log("Lecteur non prêt ou fonction playVideo non disponible au moment de descendCard.");
         }
 
         await this.delay(150); // Attendre la descente
@@ -1045,17 +1047,26 @@ async function loadYouTubeVideo(videoId) {
         
         // Si on arrive ici, aucun lecteur n'existait, nous allons en créer un nouveau
         console.log("Création d'un nouveau lecteur YouTube pour la vidéo:", videoId);
-        // Adapter le style du conteneur vidéo pour Lecteur Special
-        const isSpecial = isSpecialBrowser();
-        if (isSpecial) {
-            applyInstagramVideoStyles();
+
+        // Détermine si les contrôles natifs doivent être activés
+        const enableNativeControls = (isAnnoyingBrowser() && !iosFirstPlayDone);
+
+        // Renommer ou ajuster cette fonction si besoin
+        if (enableNativeControls) {
+            applyNativeControlsStyles(); // Applique les styles pour cacher l'overlay custom
+            console.log("Activation des contrôles natifs pour Special/iOS First Play.");
+        } else {
+            // Optionnel : S'assurer qu'aucun style natif ne reste appliqué
+            removeNativeControlsStyles(); // Fonction à créer si nécessaire
+            console.log("Activation des contrôles personnalisés.");
         }
+
         // Créer un nouveau lecteur YouTube avec des contrôles adaptés au contexte
         youtubePlayer = new YT.Player('youtube-player', {
             videoId: videoId,
             playerVars: {
-                'autoplay': isSpecial ? 0 : 1, // Désactiver l'autoplay
-                'controls': isSpecial ? 1 : 0, // Activer les contrôles natifs uniquement pour Lecteur Special
+                'autoplay': ((isAnnoyingBrowser() && !iosFirstPlayDone)) ? 0 : 1, // Autoplay 0 si Special OU (iOS et 1er play)
+                'controls': 0,
                 'showinfo': 0,
                 'modestbranding': 1,
                 'rel': 0,
@@ -1140,12 +1151,6 @@ function createCustomYouTubeOverlay() {
     // Récupérer le conteneur vidéo
     const videoContainer = document.querySelector('.video-container');
     if (!videoContainer) return;
-
-    // Ne pas créer d'overlay dans le navigateur Special
-    if (isSpecialBrowser()) {
-        console.log("Navigateur Special détecté, pas d'overlay personnalisé");
-        return;
-    }
 
     // Supprimer tout overlay existant
     const existingOverlay = videoContainer.querySelector('.youtube-custom-overlay');
@@ -1332,7 +1337,6 @@ function setupCustomVideoControls(overlay, centerIndicator, progressBar, progres
 
 // Fonction appelée lorsque le lecteur est prêt
 function onPlayerReady(event) {
-    // Vérifier si le chargement a été annulé pendant la création du lecteur
     if (videoLoadingCancelled) {
         console.log("Lecture annulée, le jeu a été réinitialisé");
         if (youtubePlayer) {
@@ -1341,24 +1345,31 @@ function onPlayerReady(event) {
         isLoadingVideo = false;
         return;
     }
-
-    // La vidéo est maintenant prête
     isLoadingVideo = false;
 
-    const isSpecial = isSpecialBrowser();
-
-    // Gérer différemment selon le navigateur
-    if (!isSpecial) {
-        // Créer l'overlay personnalisé pour contrôler la vidéo sur les navigateurs standards
+    // Créer l'overlay s'il n'existe pas, peu importe les contrôles ---
+    const existingOverlay = document.querySelector('.youtube-custom-overlay');
+    if (!existingOverlay) {
         createCustomYouTubeOverlay();
+        console.log("Overlay personnalisé créé (ou était déjà là).");
     } else {
-        console.log("Navigateur Special détecté, attente du clic de l'utilisateur sur le bouton de lecture");
-        // Dans Instagram, on attend que l'utilisateur clique sur le bouton de lecture de YouTube
-        // Le son sera activé par défaut lorsqu'il cliquera sur play
+        console.log("Overlay personnalisé déjà présent.");
     }
 
-    // Émettre un événement personnalisé
-    document.dispatchEvent(new Event('YT.PlayerState.PLAYING'));
+    // Le reste de la fonction onPlayerReady est moins pertinent maintenant pour la création,
+    // mais on garde les logs et l'application des styles qui est faite dans loadYouTubeVideo.
+    const nativeControlsEnabled = (youtubePlayer.getPlayerVars && youtubePlayer.getPlayerVars().controls === 1);
+    if (nativeControlsEnabled) {
+         console.log("Contrôles natifs initialement actifs (Annoying Browser First Play). Styles CSS devraient masquer l'overlay.");
+         // S'assurer que les styles sont bien appliqués (redondance ok)
+         applyNativeControlsStyles();
+    } else {
+         console.log("Contrôles personnalisés actifs (navigateur standard). Styles CSS devraient être retirés.");
+         // S'assurer que les styles sont bien retirés (redondance ok)
+         removeNativeControlsStyles();
+    }
+
+    console.log("Player prêt.");
 }
 
 // Fonction appelée lorsque l'état du lecteur change
@@ -1376,10 +1387,34 @@ function onPlayerStateChange(event) {
     switch (event.data) {
         case YT.PlayerState.PLAYING:
             document.dispatchEvent(new Event('YT.PlayerState.PLAYING'));
-            isLoadingVideo = false; // La vidéo joue, le chargement est terminé
-            startProgressBarUpdate();
+            isLoadingVideo = false;
             console.log("Player state: PLAYING");
-            break;
+
+            // Révéler l'overlay et gérer la barre de progression ---
+            let justPlayedFirstTime = false;
+            // Si c'est un Annoying Browser et que c'était le premier play
+            if (isAnnoyingBrowser() && !iosFirstPlayDone) {
+                console.log("Premier play manuel sur Annoying Browser détecté. Révélation de l'overlay custom.");
+                iosFirstPlayDone = true;
+                justPlayedFirstTime = true;
+                // Retirer les styles qui masquaient l'overlay custom
+                removeNativeControlsStyles();
+            }
+
+            // Démarrer la barre de progression custom si les contrôles natifs ne sont PAS affichés
+            // OU si on est sur un Annoying Browser et que le premier play a eu lieu.
+            const nativeControlsEnabled = (youtubePlayer.getPlayerVars && youtubePlayer.getPlayerVars().controls === 1);
+
+            // Condition de démarrage affinée :
+            // - Soit les contrôles natifs n'ont jamais été activés (navigateur normal)
+            // - Soit on est sur un navigateur ennuyeux et le premier play vient d'avoir lieu OU avait déjà eu lieu
+            if (!nativeControlsEnabled || (isAnnoyingBrowser() && iosFirstPlayDone)) {
+                 startProgressBarUpdate();
+            } else {
+                 // Ne devrait plus arriver dans cet état normalement, mais par sécurité:
+                 stopProgressBarUpdate();
+            }
+            break; // Fin PLAYING
         case YT.PlayerState.PAUSED:
             document.dispatchEvent(new Event('YT.PlayerState.PAUSED'));
             console.log("Player state: PAUSED");
@@ -1394,9 +1429,13 @@ function onPlayerStateChange(event) {
             break;
         case YT.PlayerState.BUFFERING:
             console.log("Player state: BUFFERING");
-            isLoadingVideo = true; // Indiquer le chargement pendant le buffering
+            isLoadingVideo = true;
+            // Arrêter la barre pendant le buffering pour éviter des sauts
             stopProgressBarUpdate();
             break;
+        case YT.PlayerState.CUED: // État quand une vidéo est chargée (souvent après loadVideoById)
+             console.log("Player state: CUED (Video ready)");
+             break;
     }
 }
 
@@ -1941,50 +1980,10 @@ function updateSelectedCard(scaleRatio) {
     }
 }
 
-// Fonction pour détecter si nous sommes dans le navigateur Instagram
-function isSpecialBrowser() {
-    // Vérifier si l'agent utilisateur contient "Instagram"
-    if (navigator.userAgent.includes('Instagram')) {
-        return true;
-    }
-
-    // Vérifier si l'agent utilisateur contient "TikTok"
-    if (navigator.userAgent.includes('TikTok')) {
-        return true;
-    }
-    
-    // Vérifier si c'est un iPhone
-    if (navigator.userAgent.includes('iPhone')) {
-        return true;
-    }
-
-    // Vérifier si l'URL de référence provient d'Instagram
-    if (document.referrer && document.referrer.includes('instagram.com')) {
-        return true;
-    }
-    
-    // Vérifier si l'URL de référence provient de TikTok
-    if (document.referrer && document.referrer.includes('tiktok.com')) {
-        return true;
-    }
-
-    // Certaines implémentations du WebView modifient window.navigator
-    try {
-        if (window.navigator.userAgent.indexOf('Instagram') !== -1 || 
-            window.navigator.userAgent.indexOf('TikTok') !== -1) {
-            return true;
-        }
-    } catch (e) {
-        console.error("Erreur lors de la vérification de userAgent:", e);
-    }
-
-    return false;
-}
-
 // Fonction pour créer et afficher le message Instagram
 function showInstagramMessage() {
     // Ne pas afficher le message si déjà affiché ou si c'est un iPhone
-    if (instagramMessageShown || navigator.userAgent.includes('iPhone')) {
+    if (instagramMessageShown) {
         return;
     }
 
@@ -2014,7 +2013,7 @@ function showInstagramMessage() {
 
     // Texte du message avec instructions pour Instagram et flèche pointant vers le haut à droite
     const messageText = document.createElement('div');
-    messageText.innerHTML = 'Ouvre la page dans ton navigateur web, ici c\'est nul <span style="font-size: 20px; margin-left: 10px;">&#8599;</span>';
+    messageText.innerHTML = 'Ouvre la page dans ton navigateur web <span style="font-size: 20px; margin-left: 10px;">&#8599;</span>';
 
     // Ajouter les éléments au conteneur
     messageContainer.appendChild(messageText);
@@ -2040,7 +2039,7 @@ document.addEventListener('DOMContentLoaded', function () {
     initializeDOMElements();
 
     // Vérifier si nous sommes dans le navigateur Instagram
-    if (isSpecialBrowser()) {
+    if (isInAppSocialBrowser()) {
         // Afficher le message pour suggérer d'ouvrir dans un navigateur web
         showInstagramMessage();
     }
@@ -2534,4 +2533,119 @@ function updateDecorativeCardsVertical() {
 function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
            (window.innerWidth <= 768);
+}
+
+// Renommer et adapter la fonction
+function applyNativeControlsStyles() {
+    let styleSheet = document.getElementById('native-controls-styles');
+    if (!styleSheet) {
+        styleSheet = document.createElement('style');
+        styleSheet.id = 'native-controls-styles';
+        document.head.appendChild(styleSheet);
+    }
+    // CSS pour s'assurer que l'iframe est cliquable et que l'overlay custom est caché
+    const cssRules = `
+        /* Cache l'overlay personnalisé et ses composants */
+        .youtube-custom-overlay,
+        .center-play-indicator,
+        .custom-video-controls,
+        .progress-container {
+            display: none !important;
+            pointer-events: none !important;
+        }
+        /* Permet les clics directs sur l'iframe quand les contrôles natifs sont actifs */
+        .video-container {
+            pointer-events: none !important; /* Le conteneur laisse passer les clics */
+        }
+        .video-container #youtube-player,
+        .video-container iframe {
+            pointer-events: auto !important; /* L'iframe reçoit les clics */
+        }
+    `;
+    styleSheet.textContent = cssRules;
+    console.log("Styles appliqués pour les contrôles natifs.");
+}
+
+// Optionnel: Fonction pour retirer ces styles si on revient aux contrôles custom
+function removeNativeControlsStyles() {
+    const styleSheet = document.getElementById('native-controls-styles');
+    if (styleSheet) {
+        styleSheet.remove();
+        console.log("Styles pour contrôles natifs retirés.");
+    }
+}
+
+// Fonction pour détecter les navigateurs avec restrictions d'autoplay (iOS, Instagram, TikTok)
+function isAnnoyingBrowser() {
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    
+    // Vérifier si l'agent utilisateur contient des indicateurs clés
+    if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+        // C'est iOS
+        return true; 
+    }
+    if (/Instagram/.test(userAgent)) {
+        // C'est Instagram
+        return true;
+    }
+    if (/TikTok/.test(userAgent)) {
+        // C'est TikTok
+        return true;
+    }
+    
+    // Vérifier l'URL de référence (moins fiable mais utile comme fallback)
+    try {
+        if (document.referrer) {
+            if (document.referrer.includes('instagram.com')) {
+                return true;
+            }
+            if (document.referrer.includes('tiktok.com')) {
+                return true;
+            }
+        }
+    } catch (e) {
+        console.warn("Impossible de vérifier document.referrer:", e);
+    }
+
+    // Certaines implémentations WebView modifient aussi window.navigator
+    try {
+        if (window.navigator.userAgent && 
+           (/Instagram|TikTok/.test(window.navigator.userAgent))) {
+            return true;
+        }
+    } catch (e) {
+        console.warn("Erreur lors de la vérification de window.navigator.userAgent:", e);
+    }
+
+    return false; // Pas un navigateur "ennuyeux" détecté
+}
+
+// Fonction pour détecter spécifiquement les navigateurs in-app Instagram/TikTok
+function isInAppSocialBrowser() {
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    
+    // Vérifier si l'agent utilisateur contient des indicateurs clés
+    if (/Instagram|TikTok/.test(userAgent)) {
+        return true;
+    }
+
+    // Vérifier l'URL de référence
+    try {
+        if (document.referrer && /instagram\.com|tiktok\.com/.test(document.referrer)) {
+            return true;
+        }
+    } catch (e) {
+        console.warn("Impossible de vérifier document.referrer:", e);
+    }
+    
+     // Vérifier window.navigator.userAgent
+     try {
+        if (window.navigator.userAgent && /Instagram|TikTok/.test(window.navigator.userAgent)) {
+            return true;
+        }
+    } catch (e) {
+        console.warn("Erreur lors de la vérification de window.navigator.userAgent:", e);
+    }
+
+    return false;
 }
