@@ -563,6 +563,9 @@ class AnimationSequence {
     }
 
     async showVideoAndControls() {
+        // S'assurer que l'overlay est créé et dans le bon état (passif/actif)
+        createCustomYouTubeOverlay();
+
         // Regrouper les mises à jour DOM pour éviter les reflows multiples
         batchDOMUpdates(() => {
             domElements.videoContainer.classList.add('visible');
@@ -1048,34 +1051,29 @@ async function loadYouTubeVideo(videoId) {
         // Si on arrive ici, aucun lecteur n'existait, nous allons en créer un nouveau
         console.log("Création d'un nouveau lecteur YouTube pour la vidéo:", videoId);
 
-        // Détermine si les contrôles natifs doivent être activés
-        const enableNativeControls = (isAnnoyingBrowser() && !iosFirstPlayDone);
+        // Détermine si les contrôles natifs doivent être activés initialement
+        const enableNativeControls = isAnnoyingBrowser() && !iosFirstPlayDone;
 
-        // Renommer ou ajuster cette fonction si besoin
-        if (enableNativeControls) {
-            applyNativeControlsStyles(); // Applique les styles pour cacher l'overlay custom
-            console.log("Activation des contrôles natifs pour Special/iOS First Play.");
-        } else {
-            // Optionnel : S'assurer qu'aucun style natif ne reste appliqué
-            removeNativeControlsStyles(); // Fonction à créer si nécessaire
-            console.log("Activation des contrôles personnalisés.");
-        }
+        // Note: L'application des styles pour l'overlay (passif/actif)
+        // sera gérée par createCustomYouTubeOverlay au moment de l'affichage.
+        
+        console.log(`Activation initiale des contrôles natifs: ${enableNativeControls}`);
 
         // Créer un nouveau lecteur YouTube avec des contrôles adaptés au contexte
         youtubePlayer = new YT.Player('youtube-player', {
             videoId: videoId,
             playerVars: {
-                'autoplay': ((isAnnoyingBrowser() && !iosFirstPlayDone)) ? 0 : 1, // Autoplay 0 si Special OU (iOS et 1er play)
-                'controls': 0,
+                'autoplay': enableNativeControls ? 0 : 1, // Autoplay 0 si contrôles natifs initiaux
+                'controls': 0, // Controls 1 si contrôles natifs initiaux
                 'showinfo': 0,
                 'modestbranding': 1,
                 'rel': 0,
                 'iv_load_policy': 3,
                 'fs': 0,
-                'disablekb': 1, // Désactiver les contrôles clavier
+                'disablekb': 1, 
                 'cc_load_policy': 0,
                 'color': 'white',
-                'playsinline': 1, // Important pour iOS
+                'playsinline': 1, 
                 'mute': 0,
                 'origin': window.location.origin,
                 'enablejsapi': 1
@@ -1148,11 +1146,10 @@ function applyInstagramVideoStyles() {
 
 // Fonction pour créer l'OVERLAY PERSONNALISÉ pour le lecteur YouTube
 function createCustomYouTubeOverlay() {
-    // Récupérer le conteneur vidéo
     const videoContainer = document.querySelector('.video-container');
     if (!videoContainer) return;
 
-    // Supprimer tout overlay existant
+    // Supprimer tout overlay existant pour éviter les doublons
     const existingOverlay = videoContainer.querySelector('.youtube-custom-overlay');
     if (existingOverlay) {
         existingOverlay.remove();
@@ -1160,8 +1157,9 @@ function createCustomYouTubeOverlay() {
 
     // Créer l'overlay principal
     const overlay = document.createElement('div');
-    overlay.className = 'youtube-custom-overlay';
+    overlay.className = 'youtube-custom-overlay'; // Sera rendu visible/invisible par CSS
 
+    // --- Contenu de l'overlay (indicateur, contrôles, barre de progression) ---
     // Ajouter l'indicateur central pour play/pause
     const centerIndicator = document.createElement('div');
     centerIndicator.className = 'center-play-indicator';
@@ -1180,7 +1178,7 @@ function createCustomYouTubeOverlay() {
     // Track visible de la barre de progression
     const progressTrack = document.createElement('div');
     progressTrack.className = 'progress-track';
-    progressTrack.style.opacity = '0.9'; // Opacité à 80% par défaut
+    progressTrack.style.opacity = '0.9'; 
 
     // Barre de progression
     const progressBar = document.createElement('div');
@@ -1193,21 +1191,22 @@ function createCustomYouTubeOverlay() {
     // Ajouter la barre de progression au conteneur de contrôles
     controls.appendChild(progressContainer);
     overlay.appendChild(controls);
+    // -----------------------------------------------------------------------
 
-    // Ajouter l'écouteur d'événement pour le survol
-    overlay.addEventListener('mouseenter', function () {
-        progressTrack.style.opacity = '1'; // 100% d'opacité au survol
-    });
-
-    overlay.addEventListener('mouseleave', function () {
-        progressTrack.style.opacity = '0.9'; // 80% d'opacité sans survol
-    });
-
-    // Ajouter l'overlay au conteneur vidéo
+    // Ajouter l'overlay au conteneur vidéo (il sera initialement stylé par les modes)
     videoContainer.appendChild(overlay);
-
-    // Ajouter les écouteurs d'événements
+    
+    // Toujours attacher les écouteurs (ils ne fonctionneront que si pointer-events: auto)
     setupCustomVideoControls(overlay, centerIndicator, progressBar, progressContainer);
+    
+    // Définir l'état initial de l'overlay (passif ou actif)
+    if (isAnnoyingBrowser() && !iosFirstPlayDone) {
+        setOverlayPassiveMode(); // Invisible et non interactif au début sur Annoying Browsers
+    } else {
+        setOverlayActiveMode(); // Visible et interactif sinon
+    }
+
+    console.log("Overlay personnalisé créé/mis à jour.");
 }
 
 // Fonction pour mettre à jour la logique de la barre de progression
@@ -1338,7 +1337,7 @@ function setupCustomVideoControls(overlay, centerIndicator, progressBar, progres
 // Fonction appelée lorsque le lecteur est prêt
 function onPlayerReady(event) {
     if (videoLoadingCancelled) {
-        console.log("Lecture annulée, le jeu a été réinitialisé");
+        console.log("Lecture annulée pendant onPlayerReady");
         if (youtubePlayer) {
             youtubePlayer.stopVideo();
         }
@@ -1346,30 +1345,9 @@ function onPlayerReady(event) {
         return;
     }
     isLoadingVideo = false;
-
-    // Créer l'overlay s'il n'existe pas, peu importe les contrôles ---
-    const existingOverlay = document.querySelector('.youtube-custom-overlay');
-    if (!existingOverlay) {
-        createCustomYouTubeOverlay();
-        console.log("Overlay personnalisé créé (ou était déjà là).");
-    } else {
-        console.log("Overlay personnalisé déjà présent.");
-    }
-
-    // Le reste de la fonction onPlayerReady est moins pertinent maintenant pour la création,
-    // mais on garde les logs et l'application des styles qui est faite dans loadYouTubeVideo.
-    const nativeControlsEnabled = (youtubePlayer.getPlayerVars && youtubePlayer.getPlayerVars().controls === 1);
-    if (nativeControlsEnabled) {
-         console.log("Contrôles natifs initialement actifs (Annoying Browser First Play). Styles CSS devraient masquer l'overlay.");
-         // S'assurer que les styles sont bien appliqués (redondance ok)
-         applyNativeControlsStyles();
-    } else {
-         console.log("Contrôles personnalisés actifs (navigateur standard). Styles CSS devraient être retirés.");
-         // S'assurer que les styles sont bien retirés (redondance ok)
-         removeNativeControlsStyles();
-    }
-
     console.log("Player prêt.");
+    // On ne gère plus l'overlay ici, createCustomYouTubeOverlay s'en charge
+    // au moment de l'affichage via showVideoAndControls.
 }
 
 // Fonction appelée lorsque l'état du lecteur change
@@ -1387,32 +1365,25 @@ function onPlayerStateChange(event) {
     switch (event.data) {
         case YT.PlayerState.PLAYING:
             document.dispatchEvent(new Event('YT.PlayerState.PLAYING'));
-            isLoadingVideo = false;
+            isLoadingVideo = false; 
             console.log("Player state: PLAYING");
 
-            // Révéler l'overlay et gérer la barre de progression ---
-            let justPlayedFirstTime = false;
-            // Si c'est un Annoying Browser et que c'était le premier play
+            // Si c'est un Annoying Browser et que c'était le premier play manuel
             if (isAnnoyingBrowser() && !iosFirstPlayDone) {
-                console.log("Premier play manuel sur Annoying Browser détecté. Révélation de l'overlay custom.");
+                console.log("Premier play manuel sur Annoying Browser détecté. Activation de l'overlay.");
                 iosFirstPlayDone = true;
-                justPlayedFirstTime = true;
-                // Retirer les styles qui masquaient l'overlay custom
-                removeNativeControlsStyles();
+                setOverlayActiveMode(); // <-- RENDRE L'OVERLAY VISIBLE ET INTERACTIF
+                // Note: Les contrôles natifs (controls=1) resteront visibles pour cette session.
             }
-
-            // Démarrer la barre de progression custom si les contrôles natifs ne sont PAS affichés
-            // OU si on est sur un Annoying Browser et que le premier play a eu lieu.
+            
+            // Démarrer la barre de progression custom SI les contrôles natifs ne sont pas affichés
+            // (Ce qui ne sera le cas que si on n'est PAS sur un Annoying Browser au départ)
             const nativeControlsEnabled = (youtubePlayer.getPlayerVars && youtubePlayer.getPlayerVars().controls === 1);
-
-            // Condition de démarrage affinée :
-            // - Soit les contrôles natifs n'ont jamais été activés (navigateur normal)
-            // - Soit on est sur un navigateur ennuyeux et le premier play vient d'avoir lieu OU avait déjà eu lieu
-            if (!nativeControlsEnabled || (isAnnoyingBrowser() && iosFirstPlayDone)) {
-                 startProgressBarUpdate();
+            if (!nativeControlsEnabled) {
+                startProgressBarUpdate();
             } else {
-                 // Ne devrait plus arriver dans cet état normalement, mais par sécurité:
-                 stopProgressBarUpdate();
+                // On ne démarre pas la barre custom si les contrôles natifs sont affichés
+                stopProgressBarUpdate(); 
             }
             break; // Fin PLAYING
         case YT.PlayerState.PAUSED:
@@ -1429,8 +1400,7 @@ function onPlayerStateChange(event) {
             break;
         case YT.PlayerState.BUFFERING:
             console.log("Player state: BUFFERING");
-            isLoadingVideo = true;
-            // Arrêter la barre pendant le buffering pour éviter des sauts
+            isLoadingVideo = true; // Indiquer le chargement pendant le buffering
             stopProgressBarUpdate();
             break;
         case YT.PlayerState.CUED: // État quand une vidéo est chargée (souvent après loadVideoById)
@@ -2535,45 +2505,7 @@ function isMobileDevice() {
            (window.innerWidth <= 768);
 }
 
-// Renommer et adapter la fonction
-function applyNativeControlsStyles() {
-    let styleSheet = document.getElementById('native-controls-styles');
-    if (!styleSheet) {
-        styleSheet = document.createElement('style');
-        styleSheet.id = 'native-controls-styles';
-        document.head.appendChild(styleSheet);
-    }
-    // CSS pour s'assurer que l'iframe est cliquable et que l'overlay custom est caché
-    const cssRules = `
-        /* Cache l'overlay personnalisé et ses composants */
-        .youtube-custom-overlay,
-        .center-play-indicator,
-        .custom-video-controls,
-        .progress-container {
-            display: none !important;
-            pointer-events: none !important;
-        }
-        /* Permet les clics directs sur l'iframe quand les contrôles natifs sont actifs */
-        .video-container {
-            pointer-events: none !important; /* Le conteneur laisse passer les clics */
-        }
-        .video-container #youtube-player,
-        .video-container iframe {
-            pointer-events: auto !important; /* L'iframe reçoit les clics */
-        }
-    `;
-    styleSheet.textContent = cssRules;
-    console.log("Styles appliqués pour les contrôles natifs.");
-}
 
-// Optionnel: Fonction pour retirer ces styles si on revient aux contrôles custom
-function removeNativeControlsStyles() {
-    const styleSheet = document.getElementById('native-controls-styles');
-    if (styleSheet) {
-        styleSheet.remove();
-        console.log("Styles pour contrôles natifs retirés.");
-    }
-}
 
 // Fonction pour détecter les navigateurs avec restrictions d'autoplay (iOS, Instagram, TikTok)
 function isAnnoyingBrowser() {
@@ -2648,4 +2580,56 @@ function isInAppSocialBrowser() {
     }
 
     return false;
+}
+
+// Gère l'état où l'overlay est caché et l'iframe est interactive
+function setOverlayPassiveMode() {
+    let styleSheet = document.getElementById('overlay-mode-styles');
+    if (!styleSheet) {
+        styleSheet = document.createElement('style');
+        styleSheet.id = 'overlay-mode-styles';
+        document.head.appendChild(styleSheet);
+    }
+    const cssRules = `
+        .youtube-custom-overlay {
+            opacity: 0 !important;
+            pointer-events: none !important; /* L'overlay n'intercepte pas les clics */
+        }
+        /* Permet les clics directs sur l'iframe */
+        .video-container #youtube-player,
+        .video-container iframe {
+            pointer-events: auto !important;
+        }
+    `;
+    styleSheet.textContent = cssRules;
+    console.log("Overlay en mode passif (invisible, iframe cliquable).");
+}
+
+// Gère l'état où l'overlay est visible et interactif
+function setOverlayActiveMode() {
+    let styleSheet = document.getElementById('overlay-mode-styles');
+    if (!styleSheet) {
+        styleSheet = document.createElement('style');
+        styleSheet.id = 'overlay-mode-styles';
+        document.head.appendChild(styleSheet);
+    }
+    const cssRules = `
+        .youtube-custom-overlay {
+            opacity: 1 !important;
+            pointer-events: auto !important; /* L'overlay intercepte les clics */
+        }
+        /* Empêche les clics directs sur l'iframe */
+        .video-container #youtube-player,
+        .video-container iframe {
+            pointer-events: none !important; 
+        }
+    `;
+    styleSheet.textContent = cssRules;
+    console.log("Overlay en mode actif (visible, interactif).");
+
+    // S'assurer que l'overlay existe (au cas où il serait appelé avant showVideoAndControls)
+    const overlay = document.querySelector('.youtube-custom-overlay');
+    if (!overlay) {
+        createCustomYouTubeOverlay(); // Crée l'overlay s'il n'existe pas encore
+    }
 }
