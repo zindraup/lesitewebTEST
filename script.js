@@ -35,7 +35,8 @@ function initializeDOMElements() {
         videoContainer: document.querySelector('.video-container'),
         buyButton: document.querySelector('.buy-button'),
         downloadButton: document.querySelector('.download-button'),
-        cards: document.querySelectorAll('.card')
+        cards: document.querySelectorAll('.card'),
+        replayButton: document.getElementById('replay-button') // <-- AJOUTER ICI
     };
 }
 
@@ -327,37 +328,29 @@ function resetUI() {
     batchDOMUpdates(() => {
         // S'assurer qu'il n'y a pas de classe instant-hide active
         domElements.videoContainer.classList.remove('instant-hide');
-
-        // Masquer la vidéo
         domElements.videoContainer.classList.remove('visible');
-
-        // Reset the transform property for the hidden state
-        domElements.videoContainer.style.transform = 'translate(-50%, -80%) scale(0.8)';
-
-        // Masquer les boutons
-        domElements.buyButton.style.opacity = '0';
-        domElements.buyButton.style.visibility = 'hidden';
-        domElements.buyButton.style.pointerEvents = 'none';
-        domElements.downloadButton.style.opacity = '0';
-        domElements.downloadButton.style.visibility = 'hidden';
-        domElements.downloadButton.style.pointerEvents = 'none';
-
-        // Masquer le titre de la production et le BPM
+        domElements.videoContainer.style.display = 'none';
+        domElements.buyButton.classList.remove('visible');
+        domElements.buyButton.classList.add('hidden');
+        domElements.downloadButton.classList.remove('visible');
+        domElements.downloadButton.classList.add('hidden');
         domElements.prodTitle.classList.remove('visible');
         domElements.prodTitle.classList.add('hidden');
         domElements.bpmText.classList.remove('visible');
         domElements.bpmText.classList.add('hidden');
-
+        
         // Reposition elements after changing their visibility
         updateTextPositions();
+
+        // Cacher le bouton Rejouer pendant la réinitialisation
+        if (domElements.replayButton) { 
+            domElements.replayButton.classList.add('hidden'); // <-- AJOUTER ICI
+        }
     });
 
-    // Mettre en stop le lecteur YouTube s'il existe, au lieu de le détruire
-    if (youtubePlayer && typeof youtubePlayer.stopVideo === 'function') {
-        youtubePlayer.stopVideo(); 
-        stopProgressBarUpdate();
-        console.log("Lecteur YouTube mis en stop.");
-    }
+    // Arrêter la mise à jour de la barre de progression (important)
+    stopProgressBarUpdate(); 
+    console.log("resetUI: Arrêt de la barre de progression.");
 
     // Réinitialiser les flags de chargement vidéo
     isLoadingVideo = false;
@@ -365,19 +358,43 @@ function resetUI() {
 
 // Fonction pour masquer la vidéo et réinitialiser le jeu
 function hideVideoAndReset() {
-    // Annuler tout chargement de vidéo en cours
+    // Indiquer que tout chargement vidéo en cours doit être annulé
     videoLoadingCancelled = true;
 
-    // Réinitialiser l'interface
-    resetUI();
+    // Grouper les mises à jour DOM pour éviter les reflows multiples
+    batchDOMUpdates(() => {
+        // S'assurer qu'il n'y a pas de classe instant-hide active
+        domElements.videoContainer.style.display = 'none';
+        domElements.videoContainer.classList.remove('visible');
+        domElements.buyButton.classList.remove('visible');
+        domElements.buyButton.classList.add('hidden');
+        domElements.downloadButton.classList.remove('visible');
+        domElements.downloadButton.classList.add('hidden');
+        domElements.prodTitle.classList.remove('visible');
+        domElements.prodTitle.classList.add('hidden');
+        domElements.bpmText.classList.remove('visible');
+        domElements.bpmText.classList.add('hidden');
+        
+        // Reposition elements after changing their visibility
+        updateTextPositions();
 
-    // Afficher le texte de redémarrage
-    domElements.restartText.classList.add('visible');
+        // Cacher le bouton Rejouer s'il était visible
+        if (domElements.replayButton) {
+            domElements.replayButton.classList.add('hidden'); // <-- AJOUTER ICI
+        }
+    });
+
+    // Arrêter la mise à jour de la barre de progression (important)
+    stopProgressBarUpdate(); 
+    console.log("resetUI: Arrêt de la barre de progression.");
+
+    // Réinitialiser les flags de chargement vidéo
+    isLoadingVideo = false;
 
     // Attendre un peu avant de réinitialiser complètement
     setTimeout(() => {
         initializeGame();
-    }, 2000);
+    }, 200);
 }
 
 // Animation sequence manager
@@ -529,6 +546,9 @@ class AnimationSequence {
         card.style.width = currentWidth;
         card.style.height = currentHeight;
 
+        // Afficher la vidéo
+        domElements.videoContainer.style.display = 'block';
+
         // La classe descend va maintenant utiliser la variable CSS pour la distance
         card.classList.add('descend');
         await this.delay(150); // Attendre la descente
@@ -569,7 +589,6 @@ class AnimationSequence {
         // Regrouper les mises à jour DOM pour éviter les reflows multiples
         batchDOMUpdates(() => {
             domElements.videoContainer.classList.add('visible');
-
             // Update the transform property for the visible state (position ajustée à 425px)
             domElements.videoContainer.style.transform = 'translate(-50%, -45%) scale(1)';
 
@@ -584,15 +603,14 @@ class AnimationSequence {
 
             // Mettre à jour l'apparence des boutons en fonction de la disponibilité des liens
             if (currentProduction && currentProduction.buy) {
+                domElements.buyButton.style.display = 'block';
                 domElements.buyButton.style.opacity = '1';
                 domElements.buyButton.style.visibility = 'visible';
                 domElements.buyButton.style.pointerEvents = 'auto';                
                 domElements.buyButton.style.cursor = 'pointer';
             } else {
-                domElements.buyButton.style.opacity = '0.5';
-                domElements.buyButton.style.visibility = 'visible';
-                domElements.buyButton.style.pointerEvents = 'auto';
-                domElements.buyButton.style.cursor = 'not-allowed';
+                domElements.buyButton.classList.remove('visible');
+                domElements.buyButton.classList.add('hidden');
             }
             
             // Gérer le bouton de téléchargement séparément
@@ -601,15 +619,14 @@ class AnimationSequence {
                                    (!isMobile && currentProduction.download_pc);
             
             if (currentProduction && hasDownloadLink) {
+                domElements.downloadButton.style.display = 'block';
                 domElements.downloadButton.style.opacity = '1';
                 domElements.downloadButton.style.visibility = 'visible';
                 domElements.downloadButton.style.pointerEvents = 'auto';
                 domElements.downloadButton.style.cursor = 'pointer';
             } else {
-                domElements.downloadButton.style.opacity = '0.5';
-                domElements.downloadButton.style.visibility = 'visible';
-                domElements.downloadButton.style.pointerEvents = 'auto'; 
-                domElements.downloadButton.style.cursor = 'not-allowed';
+                domElements.downloadButton.classList.remove('visible');
+                domElements.downloadButton.classList.add('hidden');
             }
 
             // Make sure selected card maintains its size
@@ -724,6 +741,14 @@ async function initializeGame() {
     // Réinitialiser le titre principal et les textes
     domElements.title.textContent = 'DROP THE MIC';
     domElements.title.classList.remove('hidden');
+
+    // S'assurer que les titres verticaux sont aussi visibles si nécessaire
+    if (isVertical()) {
+        const dropElement = document.querySelector('.main-title-drop');
+        const themicElement = document.querySelector('.main-title-themic');
+        if (dropElement) dropElement.classList.remove('hidden');
+        if (themicElement) themicElement.classList.remove('hidden');
+    }
 
     domElements.bottomText.textContent = 'CHOISIS UNE CARTE';
     domElements.bottomText.classList.remove('hidden');
@@ -1149,24 +1174,21 @@ function createCustomYouTubeOverlay() {
     const videoContainer = document.querySelector('.video-container');
     if (!videoContainer) return;
 
-    // Supprimer tout overlay existant pour éviter les doublons
     const existingOverlay = videoContainer.querySelector('.youtube-custom-overlay');
     if (existingOverlay) {
         existingOverlay.remove();
     }
 
-    // Créer l'overlay principal
     const overlay = document.createElement('div');
-    overlay.className = 'youtube-custom-overlay'; // Sera rendu visible/invisible par CSS
+    overlay.className = 'youtube-custom-overlay';
 
-    // --- Contenu de l'overlay (indicateur, contrôles, barre de progression) ---
-    // Ajouter l'indicateur central pour play/pause
+    // --- Indicateur central ---
     const centerIndicator = document.createElement('div');
     centerIndicator.className = 'center-play-indicator';
-    centerIndicator.innerHTML = '▶'; // Icône Play simplifiée
+    centerIndicator.innerHTML = '▶';
     overlay.appendChild(centerIndicator);
 
-    // Créer le conteneur pour la barre de progression uniquement
+    // --- Contrôles (Barre de progression) ---
     const controls = document.createElement('div');
     controls.className = 'custom-video-controls';
     controls.style.opacity = '1'; // Rendre les contrôles toujours visibles
@@ -1174,8 +1196,6 @@ function createCustomYouTubeOverlay() {
     // Conteneur de la barre de progression
     const progressContainer = document.createElement('div');
     progressContainer.className = 'progress-container';
-
-    // Track visible de la barre de progression
     const progressTrack = document.createElement('div');
     progressTrack.className = 'progress-track';
     progressTrack.style.opacity = '0.9'; 
@@ -1183,30 +1203,32 @@ function createCustomYouTubeOverlay() {
     // Barre de progression
     const progressBar = document.createElement('div');
     progressBar.className = 'progress-bar';
-
-    // Assembler les éléments de progression
     progressTrack.appendChild(progressBar);
     progressContainer.appendChild(progressTrack);
-
-    // Ajouter la barre de progression au conteneur de contrôles
     controls.appendChild(progressContainer);
     overlay.appendChild(controls);
-    // -----------------------------------------------------------------------
 
-    // Ajouter l'overlay au conteneur vidéo (il sera initialement stylé par les modes)
+    // --- NOUVEAU : Création du Tooltip ---
+    const tooltipElement = document.createElement('div');
+    tooltipElement.id = 'seek-tooltip'; // Donner un ID si besoin
+    tooltipElement.className = 'seek-tooltip hidden'; // Classe CSS + caché par défaut
+    tooltipElement.textContent = '0:00 / 0:00'; // Texte initial
+    overlay.appendChild(tooltipElement); // Ajouter à l'overlay
+    // --- FIN NOUVEAU ---
+
     videoContainer.appendChild(overlay);
-    
-    // Toujours attacher les écouteurs (ils ne fonctionneront que si pointer-events: auto)
-    setupCustomVideoControls(overlay, centerIndicator, progressBar, progressContainer);
-    
-    // Définir l'état initial de l'overlay (passif ou actif)
+
+    // Passer le tooltip à la fonction de configuration
+    setupCustomVideoControls(overlay, centerIndicator, progressBar, progressContainer, tooltipElement); // <-- AJOUTER tooltipElement
+
+    // Définir l'état initial de l'overlay (passif/actif)
     if (isAnnoyingBrowser() && !iosFirstPlayDone) {
-        setOverlayPassiveMode(); // Invisible et non interactif au début sur Annoying Browsers
+        setOverlayPassiveMode();
     } else {
-        setOverlayActiveMode(); // Visible et interactif sinon
+        setOverlayActiveMode();
     }
 
-    console.log("Overlay personnalisé créé/mis à jour.");
+    console.log("Overlay personnalisé créé/mis à jour avec tooltip.");
 }
 
 // Fonction pour mettre à jour la logique de la barre de progression
@@ -1268,69 +1290,157 @@ function stopProgressBarUpdate() {
 
 
 // Fonction pour configurer les contrôles vidéo personnalisés
-function setupCustomVideoControls(overlay, centerIndicator, progressBar, progressContainer) {
+function setupCustomVideoControls(overlay, centerIndicator, progressBar, progressContainer, tooltipElement) { // <-- Accepter tooltipElement
     let isPlaying = false;
-    let timeoutId = null;
+    if (youtubePlayer && typeof youtubePlayer.getPlayerState === 'function') {
+        const currentState = youtubePlayer.getPlayerState();
+        isPlaying = (currentState === YT.PlayerState.PLAYING || currentState === YT.PlayerState.BUFFERING);
+    }
+    console.log(`Initialisation de l'overlay - isPlaying: ${isPlaying}`);
 
-    // Fonction pour afficher momentanément l'indicateur central
+    let timeoutId = null;
+    let isSeeking = false;
+    let wasPlayingBeforeSeek = false;
+
+    // --- Helper pour formater le temps en MM:SS ---
+    function formatTime(totalSeconds) {
+        if (isNaN(totalSeconds) || totalSeconds < 0) {
+            return "0:00";
+        }
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+    // --- Fin Helper ---
+
     function showCenterIndicator(iconType) {
         centerIndicator.innerHTML = `<b>${iconType}</b>`;
         centerIndicator.classList.add('visible');
-
         if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
             centerIndicator.classList.remove('visible');
         }, 800);
     }
 
-    // Fonction pour basculer entre lecture et pause
     function togglePlayPause() {
-        if (!youtubePlayer) return;
-
+        if (!youtubePlayer || typeof youtubePlayer.getPlayerState !== 'function') return;
         try {
-            // Lire ou mettre en pause la vidéo selon l'état actuel
-            if (isPlaying) {
+            const state = youtubePlayer.getPlayerState();
+            if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) {
                 youtubePlayer.pauseVideo();
                 overlay.classList.remove('playing');
-                showCenterIndicator('❚❚'); // Afficher l'icône pause
+                showCenterIndicator('❚❚'); 
+                isPlaying = false; // Mettre à jour l'état local
             } else {
                 youtubePlayer.playVideo();
                 overlay.classList.add('playing');
-                showCenterIndicator('▶'); // Afficher l'icône play
+                showCenterIndicator('▶'); 
+                isPlaying = true; // Mettre à jour l'état local
             }
-
-            // Inverser l'état de lecture
-            isPlaying = !isPlaying;
-
         } catch (e) {
             console.error("Erreur lors du basculement lecture/pause:", e);
         }
     }
-
-    // Écouter les clics sur l'overlay principal pour play/pause
-    overlay.addEventListener('click', function (e) {
-        // Ignorer si le clic est sur les contrôles
-        if (e.target.closest('.custom-video-controls')) return;
-
-        togglePlayPause();
-    });
-
-    // Gérer le clic sur la barre de progression
-    progressContainer.addEventListener('click', function (e) {
-        // Empêcher la propagation du clic à l'overlay principal
-        e.stopPropagation();
-
-        if (!youtubePlayer) return;
-
+    
+    // --- Logique barre de progression ---
+    function calculateSeekTime(event) { // Renommée pour clarté
         const rect = progressContainer.getBoundingClientRect();
-        const clickPosition = (e.clientX - rect.left) / rect.width;
-        const seekTime = clickPosition * youtubePlayer.getDuration();
+        const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+        let clickRatio = (clientX - rect.left) / rect.width;
+        clickRatio = Math.max(0, Math.min(1, clickRatio)); 
+        return clickRatio * (youtubePlayer.getDuration() || 0);
+    }
 
-        youtubePlayer.seekTo(seekTime, true);
+    // --- NOUVEAU : Fonction pour mettre à jour le tooltip ---
+    function updateSeekTooltip(event) {
+        if (!tooltipElement || !youtubePlayer) return;
+        
+        const seekTime = calculateSeekTime(event);
+        const duration = youtubePlayer.getDuration() || 0;
+        
+        // Mettre à jour le texte du tooltip
+        tooltipElement.textContent = `${formatTime(seekTime)} / ${formatTime(duration)}`;
 
-        // Mettre à jour la barre de progression immédiatement
-        const percentage = (seekTime / youtubePlayer.getDuration()) * 100;
+        // Mettre à jour la position horizontale du tooltip
+        const rect = progressContainer.getBoundingClientRect();
+        const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+        let progressRatio = (clientX - rect.left) / rect.width;
+        progressRatio = Math.max(0, Math.min(1, progressRatio)); // Contraindre entre 0 et 1
+        
+        // Calculer la position 'left' en pixels dans le conteneur de la barre
+        const tooltipLeftPx = progressRatio * rect.width;
+        
+        // Appliquer le style (la transformation translateX(-50%) dans le CSS le centrera)
+        tooltipElement.style.left = `${tooltipLeftPx}px`;
+    }
+    // --- FIN NOUVEAU ---
+
+    function updateVisualSeek(event) {
+        if (!isSeeking || !youtubePlayer) return;
+        const seekTime = calculateSeekTime(event);
+        const duration = youtubePlayer.getDuration() || 1;
+        const percentage = (seekTime / duration) * 100;
         progressBar.style.width = `${percentage}%`;
+        
+        updateSeekTooltip(event); // <-- Mettre à jour le tooltip pendant le glisser
+    }
+
+    function startSeek(event) {
+        if (!youtubePlayer || typeof youtubePlayer.seekTo !== 'function') return;
+        event.preventDefault(); 
+        isSeeking = true;
+        const state = youtubePlayer.getPlayerState();
+        wasPlayingBeforeSeek = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
+        stopProgressBarUpdate(); 
+
+        updateVisualSeek(event); // Met à jour barre + tooltip
+        
+        // --- Afficher le tooltip ---
+        if (tooltipElement) {
+            tooltipElement.classList.add('visible');
+        }
+        // --- Fin affichage ---
+
+        document.addEventListener('mousemove', updateVisualSeek);
+        document.addEventListener('touchmove', updateVisualSeek, { passive: false }); 
+        document.addEventListener('mouseup', endSeek);
+        document.addEventListener('touchend', endSeek);
+        console.log("Début du seek");
+    }
+
+    function endSeek(event) {
+        if (!isSeeking || !youtubePlayer) return;
+        isSeeking = false;
+        
+        // --- Cacher le tooltip ---
+        if (tooltipElement) {
+             tooltipElement.classList.remove('visible');
+        }
+        // --- Fin masquage ---
+        
+        const finalSeekTime = calculateSeekTime(event);
+        console.log(`Fin du seek - Temps demandé: ${finalSeekTime.toFixed(2)}s`);
+        youtubePlayer.seekTo(finalSeekTime, true); 
+        
+        const duration = youtubePlayer.getDuration() || 1;
+        const percentage = (finalSeekTime / duration) * 100;
+        progressBar.style.width = `${percentage}%`; 
+
+        document.removeEventListener('mousemove', updateVisualSeek);
+        document.removeEventListener('touchmove', updateVisualSeek);
+        document.removeEventListener('mouseup', endSeek);
+        document.removeEventListener('touchend', endSeek);
+        
+        // Laisser onPlayerStateChange gérer le redémarrage de la barre auto
+    }
+
+    // --- Attacher les listeners ---
+    progressContainer.addEventListener('mousedown', startSeek);
+    progressContainer.addEventListener('touchstart', startSeek, { passive: false }); 
+
+    overlay.addEventListener('click', function (e) {
+        if (e.target.closest('.custom-video-controls')) return;
+        togglePlayPause();
     });
 }
 
@@ -1346,8 +1456,6 @@ function onPlayerReady(event) {
     }
     isLoadingVideo = false;
     console.log("Player prêt.");
-    // On ne gère plus l'overlay ici, createCustomYouTubeOverlay s'en charge
-    // au moment de l'affichage via showVideoAndControls.
 }
 
 // Fonction appelée lorsque l'état du lecteur change
@@ -1395,8 +1503,7 @@ function onPlayerStateChange(event) {
             document.dispatchEvent(new Event('YT.PlayerState.ENDED'));
             console.log("Vidéo terminée (ENDED)");
             stopProgressBarUpdate();
-            // Faire disparaître la vidéo et réinitialiser le jeu
-            hideVideoAndReset();
+            actionsAfterVideoEnded();
             break;
         case YT.PlayerState.BUFFERING:
             console.log("Player state: BUFFERING");
@@ -1409,6 +1516,19 @@ function onPlayerStateChange(event) {
     }
 }
 
+// Fonction pour effectuer des actions après la fin de la vidéo
+function actionsAfterVideoEnded() {
+// Cacher la vidéo et afficher le bouton "Rejouer"
+    batchDOMUpdates(() => {
+        if (domElements.videoContainer) {
+            domElements.videoContainer.style.display = 'none'; // Cacher conteneur vidéo
+            domElements.videoContainer.classList.remove('visible'); // Retirer classe visible
+        }
+        if (domElements.replayButton) {
+            domElements.replayButton.classList.remove('hidden'); // Afficher bouton Rejouer
+        }
+    });
+}
 
 
 // Fonction pour effectuer des mises à jour DOM groupées
@@ -1505,6 +1625,10 @@ async function handleRevealedCardClick(event) {
     // Empêcher la propagation pour éviter de déclencher d'autres événements
     event.stopPropagation();
 
+    // Masquer immédiatement la vidéo (sans transition)
+    domElements.videoContainer.style.display = 'none';
+    domElements.videoContainer.classList.remove('visible');
+
     // Vérifier si l'animation est en cours
     if (isAnimating) {
         console.log("Animation en cours, clic ignoré");
@@ -1520,25 +1644,41 @@ async function handleRevealedCardClick(event) {
     videoLoadingCancelled = true;
     isLoadingVideo = false;
 
-    // Mettre en stop/arrêter le lecteur au lieu de le détruire
-    if (youtubePlayer && typeof youtubePlayer.stopVideo === 'function') {
-        try {
-            youtubePlayer.stopVideo(); // Utiliser stopVideo pour arrêter complètement
-            stopProgressBarUpdate();
-            // Réinitialiser la barre de progression
-            const progressBar = document.querySelector('.progress-bar');
-            if (progressBar) {
-                progressBar.style.width = '0%';
+    // --- MODIFICATION : Gestion conditionnelle du lecteur ---
+    if (isAnnoyingBrowser() && !iosFirstPlayDone) {
+        // Cas : Annoying Browser ET premier play NON effectué -> Détruire le lecteur
+        if (youtubePlayer && typeof youtubePlayer.destroy === 'function') {
+            try {
+                console.log("Annoying Browser & 1er play non fait: Destruction du lecteur YouTube.");
+                youtubePlayer.destroy();
+                youtubePlayer = null; // Très important de remettre à null
+            } catch (error) {
+                console.error("Erreur lors de la destruction du lecteur YouTube:", error);
+                youtubePlayer = null; // Assurer la mise à null même en cas d'erreur
             }
-            console.log("Lecteur YouTube arrêté lors du clic de réinitialisation.");
-        } catch (error) {
-            console.error("Erreur lors de l'arrêt du lecteur YouTube:", error);
+        }
+        stopProgressBarUpdate(); // Arrêter la barre dans tous les cas
+    } else {
+        // Cas : Navigateur normal OU Annoying Browser AVEC premier play effectué -> Arrêter la vidéo (sans détruire)
+        if (youtubePlayer && typeof youtubePlayer.stopVideo === 'function') {
+            try {
+                console.log("Réinitialisation standard: Arrêt de la vidéo YouTube.");
+                youtubePlayer.stopVideo(); // Utiliser stopVideo pour arrêter la lecture actuelle
+            } catch (error) {
+                console.error("Erreur lors de l'arrêt du lecteur YouTube:", error);
+            }
+        }
+        stopProgressBarUpdate(); // Arrêter la barre
+        // Réinitialiser la barre de progression visuellement si elle existe
+        const progressBar = document.querySelector('.progress-bar');
+        if (progressBar) {
+            progressBar.style.width = '0%';
+        }
+         // Cacher le bouton Rejouer s'il était visible
+        if (domElements.replayButton) {
+            domElements.replayButton.classList.add('hidden');
         }
     }
-
-    // Masquer immédiatement la vidéo (sans transition)
-    domElements.videoContainer.classList.add('instant-hide');
-    domElements.videoContainer.classList.remove('visible');
 
     // Masquer également les boutons et textes immédiatement
     domElements.buyButton.style.opacity = '0';
@@ -1556,11 +1696,8 @@ async function handleRevealedCardClick(event) {
     const clickedCard = event.currentTarget;
     await resetCardWithAnimation(clickedCard);
 
-    // Retirer la classe d'instant-hide pour le prochain affichage
-    domElements.videoContainer.classList.remove('instant-hide');
-
     // Ensuite réinitialiser le jeu complet
-    initializeGame();
+    initializeGame(); // isAnimating sera remis à false à la fin
 }
 
 // Function to update text element positions based on window size
@@ -1687,25 +1824,35 @@ function updateTextPositions() {
         const buttonWidth = 180 * scaleRatio;
         const buttonHeight = 55 * scaleRatio;
         const buttonOffset = 350 * scaleRatio; // Distance depuis le centre de la vidéo
-        
+        const iconTextGap = 8 * scaleRatio; // Espace entre l'icône et le texte
+
         buyButton.style.position = 'fixed';
         buyButton.style.top = `${marginVertical + (buyButtonTopReference * scaleRatio)}px`;
         buyButton.style.left = `calc(50% + ${buttonOffset}px)`; // À droite de la vidéo
         buyButton.style.transform = 'translateY(-75%)';
         buyButton.style.width = `${buttonWidth}px`;
         buyButton.style.height = `${buttonHeight}px`;
-        
+
+        // Centrer le contenu (icône + texte) avec Flexbox
+        buyButton.style.display = 'flex';
+        buyButton.style.alignItems = 'center'; // Centrage vertical
+        buyButton.style.justifyContent = 'center'; // Centrage horizontal
+        buyButton.style.gap = `${iconTextGap}px`; // Espace entre icône et texte
+
         // Taille du texte dans le bouton
         const buyButtonText = buyButton.querySelector('span');
         if (buyButtonText) {
             buyButtonText.style.fontSize = `${14.5 * scaleRatio}px`;
+            // Assurer que le texte ne prend pas toute la largeur et permet le centrage
+            buyButtonText.style.flexShrink = '0';
         }
-        
+
         // Taille de l'icône
         const buyButtonIcon = buyButton.querySelector('img');
         if (buyButtonIcon) {
             buyButtonIcon.style.width = `${24 * scaleRatio}px`;
             buyButtonIcon.style.height = `${24 * scaleRatio}px`;
+            buyButtonIcon.style.flexShrink = '0'; // Empêcher l'icône de rétrécir
         }
     }
 
@@ -1714,25 +1861,34 @@ function updateTextPositions() {
         const buttonWidth = 180 * scaleRatio;
         const buttonHeight = 55 * scaleRatio;
         const buttonOffset = 350 * scaleRatio; // Distance depuis le centre de la vidéo
-        
+        const iconTextGap = 8 * scaleRatio; // Espace entre l'icône et le texte
+
         downloadButton.style.position = 'fixed';
         downloadButton.style.top = `${marginVertical + (downloadButtonTopReference * scaleRatio)}px`;
         downloadButton.style.left = `calc(50% - ${buttonOffset}px)`; // À gauche de la vidéo
         downloadButton.style.transform = 'translateX(-100%) translateY(-75%)'; // Décaler à gauche de sa propre largeur
         downloadButton.style.width = `${buttonWidth}px`;
         downloadButton.style.height = `${buttonHeight}px`;
-        
+
+        // Centrer le contenu (icône + texte) avec Flexbox
+        downloadButton.style.display = 'flex';
+        downloadButton.style.alignItems = 'center'; // Centrage vertical
+        downloadButton.style.justifyContent = 'center'; // Centrage horizontal
+        downloadButton.style.gap = `${iconTextGap}px`; // Espace entre icône et texte
+
         // Taille du texte dans le bouton
         const downloadButtonText = downloadButton.querySelector('span');
         if (downloadButtonText) {
-            downloadButtonText.style.fontSize = `${14.5 * scaleRatio}px`;
+            downloadButtonText.style.fontSize = `${14 * scaleRatio}px`;
+            downloadButtonText.style.flexShrink = '0';
         }
-        
+
         // Taille de l'icône
         const downloadButtonIcon = downloadButton.querySelector('img');
         if (downloadButtonIcon) {
-            downloadButtonIcon.style.width = `${24 * scaleRatio}px`;
-            downloadButtonIcon.style.height = `${24 * scaleRatio}px`;
+            downloadButtonIcon.style.width = `${22 * scaleRatio}px`;
+            downloadButtonIcon.style.height = `${22 * scaleRatio}px`;
+            downloadButtonIcon.style.flexShrink = '0'; // Empêcher l'icône de rétrécir
         }
     }
 
@@ -2354,8 +2510,9 @@ function updateTextPositionsVertical() {
     if (buyButton) {
         const buttonHorizontalShift = 220;
         const buyButtonTopReference = 1120;
-        const buttonWidth = 250 * scaleRatio;
+        const buttonWidth = 260 * scaleRatio;
         const buttonHeight = 80 * scaleRatio;
+        const iconTextGap = 10 * scaleRatio; // Espace entre l'icône et le texte
 
         buyButton.style.position = 'fixed';
         buyButton.style.top = `${marginVertical + (buyButtonTopReference * scaleRatio)}px`;
@@ -2364,10 +2521,19 @@ function updateTextPositionsVertical() {
         buyButton.style.width = `${buttonWidth}px`;
         buyButton.style.height = `${buttonHeight}px`;
 
+        // Utiliser Flexbox pour centrer l'icône et le texte
+        buyButton.style.display = 'flex';
+        buyButton.style.alignItems = 'center'; // Centrage vertical
+        buyButton.style.justifyContent = 'center'; // Centrage horizontal
+        buyButton.style.gap = `${iconTextGap}px`; // Espace entre icône et texte
+
         // Taille du texte dans le bouton
         const buyButtonText = buyButton.querySelector('span');
         if (buyButtonText) {
-            buyButtonText.style.fontSize = `${20 * scaleRatio}px`;
+            buyButtonText.style.fontSize = `${21 * scaleRatio}px`;
+            // Assurer que le texte ne prend pas de marge par défaut qui interfère
+            buyButtonText.style.margin = '0';
+            buyButtonText.style.padding = '0';
         }
 
         // Taille de l'icône
@@ -2375,14 +2541,18 @@ function updateTextPositionsVertical() {
         if (buyButtonIcon) {
             buyButtonIcon.style.width = `${40 * scaleRatio}px`;
             buyButtonIcon.style.height = `${40 * scaleRatio}px`;
+            // Assurer que l'icône ne prend pas de marge par défaut qui interfère
+            buyButtonIcon.style.margin = '0';
+            buyButtonIcon.style.padding = '0';
         }
     }
 
     if (downloadButton) {
         const buttonHorizontalShift = 220;
         const downloadButtonTopReference = 1120;
-        const buttonWidth = 250 * scaleRatio;
+        const buttonWidth = 260 * scaleRatio;
         const buttonHeight = 80 * scaleRatio;
+        const iconTextGap = 10 * scaleRatio; // Espace entre l'icône et le texte
 
         downloadButton.style.position = 'fixed';
         downloadButton.style.top = `${marginVertical + (downloadButtonTopReference * scaleRatio)}px`;
@@ -2391,17 +2561,29 @@ function updateTextPositionsVertical() {
         downloadButton.style.width = `${buttonWidth}px`;
         downloadButton.style.height = `${buttonHeight}px`;
 
+        // Utiliser Flexbox pour centrer l'icône et le texte
+        downloadButton.style.display = 'flex';
+        downloadButton.style.alignItems = 'center'; // Centrage vertical
+        downloadButton.style.justifyContent = 'center'; // Centrage horizontal
+        downloadButton.style.gap = `${iconTextGap}px`; // Espace entre icône et texte
+
         // Taille du texte dans le bouton
         const downloadButtonText = downloadButton.querySelector('span');
         if (downloadButtonText) {
-            downloadButtonText.style.fontSize = `${20 * scaleRatio}px`;
+            downloadButtonText.style.fontSize = `${19 * scaleRatio}px`;
+            // Assurer que le texte ne prend pas de marge par défaut qui interfère
+            downloadButtonText.style.margin = '0';
+            downloadButtonText.style.padding = '0';
         }
 
         // Taille de l'icône
         const downloadButtonIcon = downloadButton.querySelector('img');
         if (downloadButtonIcon) {
-            downloadButtonIcon.style.width = `${38 * scaleRatio}px`;
-            downloadButtonIcon.style.height = `${36 * scaleRatio}px`;
+            downloadButtonIcon.style.width = `${36 * scaleRatio}px`;
+            downloadButtonIcon.style.height = `${34 * scaleRatio}px`;
+            // Assurer que l'icône ne prend pas de marge par défaut qui interfère
+            downloadButtonIcon.style.margin = '0';
+            downloadButtonIcon.style.padding = '0';
         }
     }
 }
@@ -2520,7 +2702,7 @@ function isAnnoyingBrowser() {
         // C'est Instagram
         return true;
     }
-    if (/TikTok/.test(userAgent)) {
+    if (/TikTok|Bytedance|BytedanceWebview|ByteLocale|trill|musical_ly/.test(userAgent)) {
         // C'est TikTok
         return true;
     }
@@ -2534,6 +2716,9 @@ function isAnnoyingBrowser() {
             if (document.referrer.includes('tiktok.com')) {
                 return true;
             }
+            if (document.referrer.includes('bytedance.com')) {
+                return true;
+            }
         }
     } catch (e) {
         console.warn("Impossible de vérifier document.referrer:", e);
@@ -2542,7 +2727,7 @@ function isAnnoyingBrowser() {
     // Certaines implémentations WebView modifient aussi window.navigator
     try {
         if (window.navigator.userAgent && 
-           (/Instagram|TikTok/.test(window.navigator.userAgent))) {
+           (/Instagram|TikTok|Bytedance|BytedanceWebview|ByteLocale|trill|musical_ly/.test(window.navigator.userAgent))) {
             return true;
         }
     } catch (e) {
@@ -2557,13 +2742,13 @@ function isInAppSocialBrowser() {
     const userAgent = navigator.userAgent || navigator.vendor || window.opera;
     
     // Vérifier si l'agent utilisateur contient des indicateurs clés
-    if (/Instagram|TikTok/.test(userAgent)) {
+    if (/Instagram|TikTok|Bytedance|BytedanceWebview|ByteLocale|trill|musical_ly/.test(userAgent)) {
         return true;
     }
 
     // Vérifier l'URL de référence
     try {
-        if (document.referrer && /instagram\.com|tiktok\.com/.test(document.referrer)) {
+        if (document.referrer && /instagram\.com|tiktok\.com|bytedance\.com|bytedance\.com/.test(document.referrer)) {
             return true;
         }
     } catch (e) {
@@ -2572,7 +2757,7 @@ function isInAppSocialBrowser() {
     
      // Vérifier window.navigator.userAgent
      try {
-        if (window.navigator.userAgent && /Instagram|TikTok/.test(window.navigator.userAgent)) {
+        if (window.navigator.userAgent && /Instagram|TikTok|Bytedance|BytedanceWebview|ByteLocale|trill|musical_ly/.test(window.navigator.userAgent)) {
             return true;
         }
     } catch (e) {

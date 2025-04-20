@@ -571,6 +571,7 @@ h1.hidden {
         0 calc(var(--button-border-radius))
     );
     pointer-events: auto;
+    visibility: hidden;
 }
 
 .buy-button img, .download-button img {
@@ -787,43 +788,6 @@ h1, .prod-title, .bpm-text, .bottom-text, .restart-text, .card-back span, .buy-b
     will-change: transform, opacity;
 }
 
-/* Style pour le bouton/overlay Unmute */
-.unmute-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6); /* Fond semi-transparent */
-    display: flex;
-    flex-direction: column; /* Mettre l'icône au-dessus du texte */
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    z-index: -999; /* Doit être au-dessus de .youtube-custom-overlay (qui a z-index 10 par défaut ou moins) */
-    color: white;
-    font-size: 18px; /* Ajustez si besoin */
-    font-weight: bold;
-    text-align: center;
-    border-radius: var(--video-border-radius); /* Utiliser la même bordure que la vidéo */
-    /* Transition pour une disparition douce (optionnel) */
-    opacity: 1;
-    transition: opacity 0.3s ease-out;
-}
-
-.unmute-overlay svg {
-    width: 50px; /* Ajustez la taille de l'icône */
-    height: 50px;
-    margin-bottom: 10px; /* Espace entre icône et texte */
-}
-
-/* Style optionnel pour cacher lors de la suppression si vous préférez une transition */
-.unmute-overlay.hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
-
 /* Overlay complet pour le lecteur YouTube */
 .youtube-custom-overlay {
     position: absolute;
@@ -1003,4 +967,65 @@ h1, .prod-title, .bpm-text, .bottom-text, .restart-text, .card-back span, .buy-b
 /* Cacher le titre H1 original en mode vertical */
 .vertical-layout h1 {
     display: none;
+}
+
+.replay-button {
+    position: fixed;
+    top: 425px; /* Conserve la position verticale */
+    left: 50%;
+    transform: translateX(-50%) translateY(-50%);
+
+    /* Ajustements pour un look plus iconique */
+    width: 60px;        /* Rendre plus carré/rond */
+    height: 60px;       /* Rendre plus carré/rond */
+    padding: 0;         /* Retirer le padding texte */
+    border-radius: 50%; /* Rendre circulaire */
+    font-size: 30px;    /* Augmenter taille flèche */
+    line-height: 60px;  /* Centrer verticalement la flèche (match height) */
+    display: flex;      /* Utiliser flex pour un meilleur contrôle */
+    justify-content: center; /* Centrer horizontalement */
+    align-items: center;    /* Centrer verticalement */
+
+    background-color: rgba(255, 204, 0, 0.85); /* Couleur jaune/orange */
+    color: #111;          /* Couleur flèche foncée */
+    border: 2px solid rgba(255, 255, 255, 0.5); /* Bordure claire */
+    text-align: center;
+    z-index: 1002;
+    transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.2s ease, background-color 0.2s ease; /* Ajouter transition transform/background */
+    opacity: 1;
+    visibility: visible;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Classe pour cacher */
+.replay-button.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(-50%) scale(0.8); /* Rétrécir en disparaissant */
+}
+
+/* Style pour le tooltip de la barre de progression */
+.seek-tooltip {
+  position: absolute;
+  bottom: 35px; /* Ajuster pour être au-dessus de la barre */
+  left: 50%; /* Position horizontale gérée par JS */
+  transform: translateX(-50%); /* Centrer le tooltip horizontalement */
+  background-color: rgba(255, 204, 0, 0.8);
+  color: rgb(0, 0, 0);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: Arial, sans-serif, bold; /* Police simple */
+  white-space: nowrap; /* Empêcher le retour à la ligne */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  pointer-events: none; /* Important pour ne pas gêner le glisser */
+  z-index: 15; /* Au-dessus des autres contrôles */
+}
+
+.seek-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
 }
