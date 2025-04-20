@@ -1342,13 +1342,42 @@ function setupCustomVideoControls(overlay, centerIndicator, progressBar, progres
         }
     }
     
-    // --- Logique barre de progression ---
-    function calculateSeekTime(event) { // Renommée pour clarté
+    // Fonction pour calculer la position de recherche basée sur l'événement
+    function calculateSeekTime(event) {
         const rect = progressContainer.getBoundingClientRect();
-        const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+        let clientX;
+
+        // Déterminer la coordonnée X correcte selon le type d'événement
+        if (event.type.startsWith('touch')) {
+            // Pour touchmove, utiliser touches[0]
+            // Pour touchend, utiliser changedTouches[0]
+            const touch = event.touches && event.touches.length > 0 
+                        ? event.touches[0] 
+                        : (event.changedTouches && event.changedTouches.length > 0 ? event.changedTouches[0] : null);
+            if (!touch) {
+                console.warn("Impossible de déterminer les coordonnées tactiles.");
+                return NaN; // Retourner NaN si aucune info tactile n'est trouvée
+            }
+            clientX = touch.clientX;
+        } else {
+            // Pour les événements souris (mousedown, mousemove, mouseup)
+            clientX = event.clientX;
+        }
+
+        // Vérifier si clientX est valide
+        if (typeof clientX === 'undefined' || clientX === null) {
+             console.warn("Coordonnée clientX indéfinie ou nulle.");
+             return NaN; 
+        }
+
         let clickRatio = (clientX - rect.left) / rect.width;
-        clickRatio = Math.max(0, Math.min(1, clickRatio)); 
-        return clickRatio * (youtubePlayer.getDuration() || 0);
+        clickRatio = Math.max(0, Math.min(1, clickRatio)); // Contraindre entre 0 et 1
+
+        const duration = youtubePlayer.getDuration() || 0;
+        const seekTime = clickRatio * duration;
+
+        // S'assurer qu'on retourne un nombre valide
+        return isNaN(seekTime) ? 0 : seekTime; 
     }
 
     // --- NOUVEAU : Fonction pour mettre à jour le tooltip ---
@@ -1408,28 +1437,47 @@ function setupCustomVideoControls(overlay, centerIndicator, progressBar, progres
         console.log("Début du seek");
     }
 
+    // Dans setupCustomVideoControls
+
+    // Fonction pour terminer le glisser/chercher
     function endSeek(event) {
         if (!isSeeking || !youtubePlayer) return;
-        isSeeking = false;
         
-        // --- Cacher le tooltip ---
+        // Sauvegarder l'état isSeeking *avant* de retirer les listeners, 
+        // au cas où l'event se déclenche à nouveau rapidement.
+        const wasSeeking = isSeeking; 
+        isSeeking = false; 
+        
+        // Cacher le tooltip
         if (tooltipElement) {
              tooltipElement.classList.remove('visible');
         }
-        // --- Fin masquage ---
         
-        const finalSeekTime = calculateSeekTime(event);
-        console.log(`Fin du seek - Temps demandé: ${finalSeekTime.toFixed(2)}s`);
-        youtubePlayer.seekTo(finalSeekTime, true); 
-        
-        const duration = youtubePlayer.getDuration() || 1;
-        const percentage = (finalSeekTime / duration) * 100;
-        progressBar.style.width = `${percentage}%`; 
-
+        // Retirer les listeners du document
         document.removeEventListener('mousemove', updateVisualSeek);
         document.removeEventListener('touchmove', updateVisualSeek);
         document.removeEventListener('mouseup', endSeek);
         document.removeEventListener('touchend', endSeek);
+        
+        // Seulement si on était bien en train de chercher
+        if (wasSeeking) {
+            const finalSeekTime = calculateSeekTime(event);
+    
+            // Vérifier que le temps est valide avant de seek
+            if (!isNaN(finalSeekTime)) {
+                console.log(`Fin du seek - Temps demandé: ${finalSeekTime.toFixed(2)}s`);
+                youtubePlayer.seekTo(finalSeekTime, true); // Demande le seek
+            
+                // Met à jour la barre visuellement à la position demandée
+                const duration = youtubePlayer.getDuration() || 1;
+                const percentage = (finalSeekTime / duration) * 100;
+                progressBar.style.width = `${percentage}%`; 
+            } else {
+                 console.error("Impossible de calculer le temps final pour seekTo.");
+                 // Optionnel : forcer une mise à jour de la barre à la position actuelle réelle ?
+                 // updateProgressBarLogic(); // Pourrait aider à resynchroniser visuellement en cas d'erreur
+            }
+        }
         
         // Laisser onPlayerStateChange gérer le redémarrage de la barre auto
     }
