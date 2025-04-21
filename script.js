@@ -36,7 +36,13 @@ function initializeDOMElements() {
         buyButton: document.querySelector('.buy-button'),
         downloadButton: document.querySelector('.download-button'),
         cards: document.querySelectorAll('.card'),
-        replayButton: document.getElementById('replay-button') // <-- AJOUTER ICI
+        // Ancien bouton replay, peut être retiré si vous supprimez l'élément HTML
+        // replayButton: document.getElementById('replay-button'), 
+        // Nouveaux éléments écran de fin
+        endScreenContainer: document.getElementById('end-screen-container'),
+        endScreenTitle: document.getElementById('end-screen-title'),
+        endScreenButtons: document.getElementById('end-screen-buttons'),
+        endScreenTimer: document.getElementById('end-screen-timer')
     };
 }
 
@@ -321,39 +327,53 @@ function setupCardHoverEffects() {
 
 // Fonction commune pour réinitialiser l'interface utilisateur
 function resetUI() {
-    // Indiquer que tout chargement vidéo en cours doit être annulé
     videoLoadingCancelled = true;
-
-    // Grouper les mises à jour DOM pour éviter les reflows multiples
     batchDOMUpdates(() => {
-        // S'assurer qu'il n'y a pas de classe instant-hide active
-        domElements.videoContainer.classList.remove('instant-hide');
-        domElements.videoContainer.classList.remove('visible');
-        domElements.videoContainer.style.display = 'none';
-        domElements.buyButton.classList.remove('visible');
-        domElements.buyButton.classList.add('hidden');
-        domElements.downloadButton.classList.remove('visible');
-        domElements.downloadButton.classList.add('hidden');
-        domElements.prodTitle.classList.remove('visible');
-        domElements.prodTitle.classList.add('hidden');
-        domElements.bpmText.classList.remove('visible');
-        domElements.bpmText.classList.add('hidden');
-        
-        // Reposition elements after changing their visibility
-        updateTextPositions();
-
-        // Cacher le bouton Rejouer pendant la réinitialisation
-        if (domElements.replayButton) { 
-            domElements.replayButton.classList.add('hidden'); // <-- AJOUTER ICI
+        // Cacher conteneur vidéo
+         if (domElements.videoContainer) {
+            domElements.videoContainer.style.display = 'none';
+            domElements.videoContainer.classList.remove('visible');
         }
+
+        // --- AJOUT/MODIFICATION : Cacher explicitement les boutons ---
+        if (domElements.buyButton) {
+            domElements.buyButton.style.opacity = '0';
+            domElements.buyButton.style.visibility = 'hidden';
+            domElements.buyButton.style.pointerEvents = 'none';
+            domElements.buyButton.style.display = 'none'; // <-- Ajouter display: none
+        }
+        if (domElements.downloadButton) {
+            domElements.downloadButton.style.opacity = '0';
+            domElements.downloadButton.style.visibility = 'hidden';
+            domElements.downloadButton.style.pointerEvents = 'none';
+            domElements.downloadButton.style.display = 'none'; // <-- Ajouter display: none
+        }
+        // --- FIN ---
+
+        // Cacher les textes
+        if (domElements.prodTitle) {
+            domElements.prodTitle.classList.remove('visible');
+            domElements.prodTitle.classList.add('hidden');
+        }
+        if (domElements.bpmText) {
+            domElements.bpmText.classList.remove('visible');
+            domElements.bpmText.classList.add('hidden');
+        }
+        // Cacher l'écran de fin
+        if (domElements.endScreenContainer) {
+            domElements.endScreenContainer.classList.remove('visible');
+        }
+        // Cacher l'ancien bouton Rejouer (flèche)
+        const oldReplayButton = document.getElementById('replay-button');
+        if (oldReplayButton) {
+            oldReplayButton.classList.add('hidden');
+        }
+
+        updateTextPositions(); // Appelée APRÈS avoir caché les éléments
     });
-
-    // Arrêter la mise à jour de la barre de progression (important)
-    stopProgressBarUpdate(); 
-    console.log("resetUI: Arrêt de la barre de progression.");
-
-    // Réinitialiser les flags de chargement vidéo
+    stopProgressBarUpdate();
     isLoadingVideo = false;
+    console.log("resetUI: Éléments cachés (y compris boutons avec display:none).");
 }
 
 // Fonction pour masquer la vidéo et réinitialiser le jeu
@@ -586,54 +606,66 @@ class AnimationSequence {
         // S'assurer que l'overlay est créé et dans le bon état (passif/actif)
         createCustomYouTubeOverlay();
 
-        // Regrouper les mises à jour DOM pour éviter les reflows multiples
         batchDOMUpdates(() => {
-            domElements.videoContainer.classList.add('visible');
-            // Update the transform property for the visible state (position ajustée à 425px)
-            domElements.videoContainer.style.transform = 'translate(-50%, -45%) scale(1)';
-
-            // Afficher le titre de la production et le BPM en même temps que la vidéo
-            domElements.prodTitle.classList.remove('hidden');
-            domElements.prodTitle.classList.add('visible');
-
-            domElements.bpmText.classList.remove('hidden');
-            domElements.bpmText.classList.add('visible');
-
-            domElements.restartText.classList.add('visible');
-
-            // Mettre à jour l'apparence des boutons en fonction de la disponibilité des liens
-            if (currentProduction && currentProduction.buy) {
-                domElements.buyButton.style.display = 'block';
-                domElements.buyButton.style.opacity = '1';
-                domElements.buyButton.style.visibility = 'visible';
-                domElements.buyButton.style.pointerEvents = 'auto';                
-                domElements.buyButton.style.cursor = 'pointer';
-            } else {
-                domElements.buyButton.classList.remove('visible');
-                domElements.buyButton.classList.add('hidden');
-            }
-            
-            // Gérer le bouton de téléchargement séparément
-            const isMobile = isMobileDevice();
-            const hasDownloadLink = (isMobile && currentProduction.download_android) || 
-                                   (!isMobile && currentProduction.download_pc);
-            
-            if (currentProduction && hasDownloadLink) {
-                domElements.downloadButton.style.display = 'block';
-                domElements.downloadButton.style.opacity = '1';
-                domElements.downloadButton.style.visibility = 'visible';
-                domElements.downloadButton.style.pointerEvents = 'auto';
-                domElements.downloadButton.style.cursor = 'pointer';
-            } else {
-                domElements.downloadButton.classList.remove('visible');
-                domElements.downloadButton.classList.add('hidden');
+            // --- Afficher conteneur vidéo ---
+            if (domElements.videoContainer) {
+                 domElements.videoContainer.style.display = 'block'; // Rétablir display
+                 domElements.videoContainer.classList.add('visible');
+                 domElements.videoContainer.style.transform = 'translate(-50%, -45%) scale(1)';
             }
 
-            // Make sure selected card maintains its size
+            // --- Afficher les textes ---
+            if (domElements.prodTitle) {
+                domElements.prodTitle.classList.remove('hidden');
+                domElements.prodTitle.classList.add('visible');
+            }
+            if (domElements.bpmText) {
+                domElements.bpmText.classList.remove('hidden');
+                domElements.bpmText.classList.add('visible');
+            }
+            if (domElements.restartText) {
+                 domElements.restartText.classList.add('visible');
+            }
+
+            // --- Afficher les boutons (logique existante + display) ---
+            if (domElements.buyButton) {
+                domElements.buyButton.style.display = 'flex'; // <-- Rétablir display AVANT visibilité
+                if (currentProduction && currentProduction.buy) {
+                    domElements.buyButton.style.opacity = '1';
+                    domElements.buyButton.style.visibility = 'visible';
+                    domElements.buyButton.style.pointerEvents = 'auto';
+                    domElements.buyButton.style.cursor = 'pointer';
+                } else {
+                    // Styles pour bouton désactivé (garder visible mais grisé)
+                    domElements.buyButton.style.opacity = '0.5'; // Ou votre style désactivé
+                    domElements.buyButton.style.visibility = 'visible';
+                    domElements.buyButton.style.pointerEvents = 'auto'; // Garder cliquable pour voir le curseur not-allowed
+                    domElements.buyButton.style.cursor = 'not-allowed';
+                }
+            }
+
+            if (domElements.downloadButton) {
+                 domElements.downloadButton.style.display = 'flex'; // <-- Rétablir display AVANT visibilité
+                 const isMobile = isMobileDevice();
+                 const hasDownloadLink = (isMobile && currentProduction.download_android) ||
+                                       (!isMobile && currentProduction.download_pc);
+                 if (currentProduction && hasDownloadLink) {
+                    domElements.downloadButton.style.opacity = '1';
+                    domElements.downloadButton.style.visibility = 'visible';
+                    domElements.downloadButton.style.pointerEvents = 'auto';
+                    domElements.downloadButton.style.cursor = 'pointer';
+                } else {
+                    // Styles pour bouton désactivé
+                    domElements.downloadButton.style.opacity = '0.5';
+                    domElements.downloadButton.style.visibility = 'visible';
+                    domElements.downloadButton.style.pointerEvents = 'auto';
+                    domElements.downloadButton.style.cursor = 'not-allowed';
+                }
+            }
+            // --- Fin affichage boutons ---
+
             updateSelectedCard();
-
-            // Reposition elements after changing their visibility
-            updateTextPositions();
+            updateTextPositions(); // Repositionner après avoir TOUT rendu visible/caché
         });
     }
 }
@@ -687,13 +719,81 @@ async function resetCardWithAnimation(card) {
 async function initializeGame() {
     console.log("Initialisation du jeu...");
 
+    // Arrêter le timer de l'écran de fin s'il est en cours
+    if (endScreenTimerInterval) {
+        clearInterval(endScreenTimerInterval);
+        endScreenTimerInterval = null;
+    }
+
+    // Cacher l'écran de fin s'il est visible et retirer son listener
+    if (domElements.endScreenContainer && domElements.endScreenContainer.classList.contains('visible')) {
+         domElements.endScreenContainer.classList.remove('visible');
+         domElements.endScreenContainer.removeEventListener('click', handleEndScreenClick);
+    }
+    // Remettre les boutons dans le body (ou leur conteneur parent d'origine)
+    // Assumons que c'est document.body pour l'instant. Adaptez si nécessaire.
+    if (domElements.buyButton && domElements.downloadButton) {
+        // Vérifier s'ils sont actuellement dans l'écran de fin avant de les déplacer
+        if (domElements.endScreenButtons && domElements.endScreenButtons.contains(domElements.buyButton)) {
+             document.body.appendChild(domElements.buyButton);
+             document.body.appendChild(domElements.downloadButton);
+             console.log("Boutons remis dans document.body");
+        }
+    }
+    // Réinitialiser le texte des boutons à leur état initial
+    const downloadButtonText = domElements.downloadButton.querySelector('span');
+    if (downloadButtonText) {
+        downloadButtonText.textContent = 'TÉLÉCHARGER';
+    }
+    const buyButtonText = domElements.buyButton.querySelector('span');
+    if (buyButtonText) {
+        buyButtonText.textContent = 'ACHETER';
+    }
+
+    // Réinitialiser tous les styles des boutons
+    if (domElements.downloadButton) {
+        // Réinitialiser les styles du bouton de téléchargement
+        domElements.downloadButton.style = ""; // Effacer tous les styles inline
+        // Rétablir les styles de positionnement de base
+        domElements.downloadButton.style.opacity = '0';
+        domElements.downloadButton.style.visibility = 'hidden';
+        domElements.downloadButton.style.right = 'calc(50% + 280px)';
+        domElements.downloadButton.style.top = '40%';
+        domElements.downloadButton.style.transform = 'translateY(-75%)';
+        domElements.downloadButton.style.animation = 'none';
+        
+        // Réorganiser les éléments internes (remettre l'icône à gauche si nécessaire)
+        const img = domElements.downloadButton.querySelector('img');
+        const span = domElements.downloadButton.querySelector('span');
+        if (img && span) {
+            img.style = ""; // Réinitialiser les styles de l'image
+            span.style = ""; // Réinitialiser les styles du texte
+            // S'assurer que l'ordre est correct pour l'affichage normal (icône à gauche)
+            if (domElements.downloadButton.firstChild !== img) {
+                domElements.downloadButton.insertBefore(img, span);
+            }
+        }
+    }
+
+    if (domElements.buyButton) {
+        // Réinitialiser les styles du bouton d'achat
+        domElements.buyButton.style = ""; // Effacer tous les styles inline
+        // Rétablir les styles de positionnement de base
+        domElements.buyButton.style.opacity = '0';
+        domElements.buyButton.style.visibility = 'hidden';
+        domElements.buyButton.style.left = 'calc(50% + 280px)';
+        domElements.buyButton.style.top = '40%';
+        domElements.buyButton.style.transform = 'translateY(-75%)';
+        domElements.buyButton.style.animation = 'none';
+    }
+
     // Charger l'API YouTube
     loadYouTubeAPI();
 
     // Empêcher les clics pendant la réinitialisation
     isAnimating = true;
 
-    // Réinitialiser l'interface
+    // Réinitialiser l'interface (cachera aussi endScreenContainer via la classe)
     resetUI();
 
     // Identifier la carte sélectionnée (s'il y en a une)
@@ -1564,20 +1664,156 @@ function onPlayerStateChange(event) {
     }
 }
 
+// Variable pour stocker l'ID de l'intervalle du timer
+let endScreenTimerInterval = null;
+
 // Fonction pour effectuer des actions après la fin de la vidéo
 function actionsAfterVideoEnded() {
-// Cacher la vidéo et afficher le bouton "Rejouer"
-    batchDOMUpdates(() => {
-        if (domElements.videoContainer) {
-            domElements.videoContainer.style.display = 'none'; // Cacher conteneur vidéo
-            domElements.videoContainer.classList.remove('visible'); // Retirer classe visible
-        }
-        if (domElements.replayButton) {
-            domElements.replayButton.classList.remove('hidden'); // Afficher bouton Rejouer
-        }
-    });
+    console.log("Vidéo terminée, affichage de l'écran de fin.");
+    stopProgressBarUpdate(); // Arrêter la barre de progression
+
+    if (!domElements.endScreenContainer || !domElements.endScreenTitle || !domElements.endScreenButtons || !domElements.buyButton || !domElements.downloadButton || !currentProduction) {
+        console.error("Éléments DOM manquants pour l'écran de fin ou production non définie.");
+        // Fallback: réinitialiser simplement le jeu
+        initializeGame();
+        return;
+    }
+    
+    // Arrêter tout timer existant pour éviter les doublons
+    if (endScreenTimerInterval) {
+        clearInterval(endScreenTimerInterval);
+        endScreenTimerInterval = null;
+    }
+    
+    // Cacher le conteneur vidéo (il devrait déjà l'être par le CSS mais on assure)
+    if (domElements.videoContainer) {
+        domElements.videoContainer.style.display = 'none';
+        domElements.videoContainer.classList.remove('visible');
+    }
+    // Cacher l'ancien bouton rejouer (flèche) s'il existe encore
+    const oldReplayButton = document.getElementById('replay-button');
+    if (oldReplayButton) {
+        oldReplayButton.classList.add('hidden');
+    }
+
+    // Mettre à jour le titre sur l'écran de fin
+    domElements.endScreenTitle.textContent = currentProduction.title;
+
+    // Réinitialiser les styles du bouton de téléchargement pour l'écran de fin
+    // Ceci est nécessaire car le style peut avoir été modifié ailleurs
+    domElements.downloadButton.style.opacity = '1';
+    domElements.downloadButton.style.visibility = 'visible';
+    domElements.downloadButton.style.pointerEvents = 'auto';
+    domElements.downloadButton.style.display = 'flex';
+    domElements.downloadButton.style.position = 'static';
+    domElements.downloadButton.style.transform = 'none';
+    domElements.downloadButton.style.left = 'auto';
+    domElements.downloadButton.style.right = 'auto';
+    domElements.downloadButton.style.top = 'auto';
+    domElements.downloadButton.style.clipPath = 'none';
+
+    // Mettre à jour le texte du bouton de téléchargement
+    const downloadButtonText = domElements.downloadButton.querySelector('span');
+    if (downloadButtonText) {
+        downloadButtonText.textContent = 'TÉLÉCHARGEMENT DIRECT';
+    }
+
+    // Mettre à jour le texte du bouton d'achat en "INFORMATIONS"
+    const buyButtonText = domElements.buyButton.querySelector('span');
+    if (buyButtonText) {
+        buyButtonText.textContent = 'INFORMATIONS';
+    }
+
+    // Réinitialiser les styles du bouton d'informations (ancien bouton d'achat)
+    domElements.buyButton.style.opacity = '1';
+    domElements.buyButton.style.visibility = 'visible';
+    domElements.buyButton.style.pointerEvents = 'auto';
+    domElements.buyButton.style.display = 'flex';
+    domElements.buyButton.style.position = 'static';
+    domElements.buyButton.style.transform = 'none';
+    domElements.buyButton.style.animation = 'none';
+
+    // S'assurer que l'animation est appliquée
+    domElements.downloadButton.style.animation = 'downloadButtonPulse 2s infinite alternate ease-in-out';
+
+    // Déplacer les boutons Acheter et Télécharger dans le conteneur de l'écran de fin
+    domElements.endScreenButtons.innerHTML = ''; // Vider d'abord pour éviter les doublons
+    domElements.endScreenButtons.appendChild(domElements.downloadButton);
+    domElements.endScreenButtons.appendChild(domElements.buyButton);
+
+    // Initialiser le timer
+    initEndScreenTimer();
+
+    // Afficher le conteneur de l'écran de fin
+    domElements.endScreenContainer.classList.add('visible');
+
+    // Ajouter l'écouteur pour rejouer au clic sur le fond
+    // Utiliser une fonction nommée pour pouvoir la retirer facilement
+    domElements.endScreenContainer.addEventListener('click', handleEndScreenClick);
 }
 
+// Fonction pour initialiser et démarrer le timer de l'écran de fin
+function initEndScreenTimer() {
+    const timerElement = document.getElementById('end-screen-timer');
+    if (!timerElement) return;
+    
+    let timeLeft = 15; // Temps initial en secondes (modifié à 15)
+    timerElement.textContent = timeLeft;
+    timerElement.classList.remove('urgent');
+    
+    // Démarrer le compte à rebours
+    endScreenTimerInterval = setInterval(() => {
+        timeLeft--;
+        
+        // Mettre à jour l'affichage
+        timerElement.textContent = timeLeft;
+        
+        // Ajouter la classe 'urgent' si moins de 3 secondes restantes
+        if (timeLeft <= 5) {
+            timerElement.classList.add('urgent');
+        }
+        
+        // Quand le timer atteint 0, fermer l'écran et réinitialiser le jeu
+        if (timeLeft <= 0) {
+            clearInterval(endScreenTimerInterval);
+            endScreenTimerInterval = null;
+            
+            // Fermer l'écran de fin et réinitialiser
+            if (domElements.endScreenContainer) {
+                domElements.endScreenContainer.classList.remove('visible');
+                domElements.endScreenContainer.removeEventListener('click', handleEndScreenClick);
+            }
+            
+            // Réinitialiser le jeu
+            initializeGame();
+        }
+    }, 1000);
+}
+
+// Fonction pour gérer le clic sur l'écran de fin (pour rejouer)
+function handleEndScreenClick(event) {
+    // Vérifier si le clic provient DIRECTEMENT du conteneur ou de son contenu direct
+    // et NON des boutons déplacés (ou de leurs enfants <img>, <span>)
+    if (!event.target.closest('.buy-button') && !event.target.closest('.download-button')) {
+        console.log("Clic sur fond écran de fin, réinitialisation...");
+        
+        // Arrêter le timer
+        if (endScreenTimerInterval) {
+            clearInterval(endScreenTimerInterval);
+            endScreenTimerInterval = null;
+        }
+        
+        // Cacher l'écran de fin immédiatement
+        if (domElements.endScreenContainer) {
+            domElements.endScreenContainer.classList.remove('visible');
+             // Retirer l'écouteur pour éviter les appels multiples
+            domElements.endScreenContainer.removeEventListener('click', handleEndScreenClick);
+        }
+       
+        // Lancer la réinitialisation (qui remettra les boutons à leur place)
+        initializeGame();
+    }
+}
 
 // Fonction pour effectuer des mises à jour DOM groupées
 function batchDOMUpdates(updateFunction) {
